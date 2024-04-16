@@ -1,0 +1,51 @@
+// server.js
+
+const express = require('express');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+const User = require('./models/user');
+const authRoutes = require('./routes/auth');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json());
+app.use(session({ secret: 'secret', resave: false, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport local strategy
+passport.use(new LocalStrategy((username, password, done) => {
+    User.findOne({ username }, (err, user) => {
+        if (err) { return done(err); }
+        if (!user) { return done(null, false, { message: 'Incorrect username' }); }
+        if (!user.validPassword(password)) { return done(null, false, { message: 'Incorrect password' }); }
+        return done(null, user);
+    });
+}));
+
+passport.serializeUser((user, done) => {
+    done(null, user.id);
+});
+
+passport.deserializeUser((id, done) => {
+    User.findById(id, (err, user) => {
+        done(err, user);
+    });
+});
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/banking_system', { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('MongoDB connected'))
+    .catch(err => console.error(err));
+
+// Routes
+app.use('/api/auth', authRoutes);
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
